@@ -97,3 +97,49 @@ int sys_getdate(void) {
     cmostime(dp);
     return 0;
 }
+
+int
+a_ge_b(struct rtcdate *a, struct rtcdate *b)
+{
+  if (a->year   != b->year  ) { return a->year   >= b->year  ; }
+  if (a->month  != b->month ) { return a->month  >= b->month ; }
+  if (a->day    != b->day   ) { return a->day    >= b->day   ; }
+  if (a->hour   != b->hour  ) { return a->hour   >= b->hour  ; }
+  if (a->minute != b->minute) { return a->minute >= b->minute; }
+                                return a->second >= b->second;
+}
+
+int
+sys_sleep_until(void)
+{
+  struct rtcdate now, *until;
+
+  // fetch target date
+  if (argptr(0, (char **)&until, sizeof(until)) < 0) {
+    return -1;
+  }
+
+  // fetch current date
+  cmostime(&now);
+
+  // if `until` is before `now`, then return error
+  if (a_ge_b(&now, until)) {
+    return -1;
+  }
+
+  // wait until `now` >= `until`
+  acquire(&tickslock);
+  while (!a_ge_b(&now, until)) {
+    if (myproc()->killed) {
+      release(&tickslock);
+      return -1;
+    }
+    sleep(&ticks, &tickslock);
+
+    // renew current date
+    cmostime(&now);
+  }
+  release(&tickslock);
+
+  return 0;
+}
